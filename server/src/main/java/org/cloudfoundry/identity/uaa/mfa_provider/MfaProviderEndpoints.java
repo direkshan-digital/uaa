@@ -20,6 +20,7 @@ import java.util.List;
 import static org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY;
 import static org.springframework.web.bind.annotation.RequestMethod.GET;
 import static org.springframework.web.bind.annotation.RequestMethod.POST;
+import static org.springframework.web.bind.annotation.RequestMethod.PUT;
 
 @RequestMapping("/mfa-providers")
 @RestController
@@ -34,20 +35,37 @@ public class MfaProviderEndpoints implements ApplicationEventPublisherAware{
     }
 
     @RequestMapping(method = POST)
-    public ResponseEntity<MfaProvider> createMfaProvider(@RequestBody MfaProvider provider) {
+    public ResponseEntity<MfaProvider> createMfaProvider(@RequestBody MfaProvider body) {
         String zoneId = IdentityZoneHolder.get().getId();
         try {
-            provider.setIdentityZoneId(zoneId);
-            provider.validate();
-            if(!StringUtils.hasText(provider.getConfig().getIssuer())){
-                provider.getConfig().setIssuer(IdentityZoneHolder.get().getName());
+            body.setIdentityZoneId(zoneId);
+            body.validate();
+            if(!StringUtils.hasText(body.getConfig().getIssuer())){
+                body.getConfig().setIssuer(IdentityZoneHolder.get().getName());
             }
         } catch (IllegalArgumentException e) {
-            logger.debug("MfaProvider [name"+provider.getName()+"] - Configuration validation error.", e);
-            return new ResponseEntity<>(provider, UNPROCESSABLE_ENTITY);
+            logger.debug("MfaProvider [name"+ body.getName()+"] - Configuration validation error.", e);
+            return new ResponseEntity<>(body, UNPROCESSABLE_ENTITY);
         }
-        MfaProvider created = mfaProviderProvisioning.create(provider,zoneId);
+        MfaProvider created = mfaProviderProvisioning.create(body,zoneId);
         return new ResponseEntity<>(created, HttpStatus.CREATED);
+    }
+
+    @RequestMapping(value = "{id}", method = PUT)
+    public ResponseEntity<MfaProvider> updateMfaProvider(@PathVariable String id, @RequestBody MfaProvider body) {
+        String zoneId = IdentityZoneHolder.get().getId();
+        MfaProvider existing = mfaProviderProvisioning.retrieve(id, zoneId);
+        body.setId(id);
+        body.setIdentityZoneId(zoneId);
+        try {
+            body.validate();
+        } catch (IllegalArgumentException e) {
+            logger.debug("MfaProvider [name"+body.getName()+"] - Configuration validation error.", e);
+            return new ResponseEntity<>(body, UNPROCESSABLE_ENTITY);
+        }
+        MfaProvider updated = mfaProviderProvisioning.update(body, zoneId);
+        return new ResponseEntity<>(updated, HttpStatus.OK);
+
     }
 
     public MfaProviderProvisioning getMfaProviderProvisioning() {
@@ -76,4 +94,5 @@ public class MfaProviderEndpoints implements ApplicationEventPublisherAware{
     public ResponseEntity<String> handleProviderNotFoundException() {
         return new ResponseEntity<>("MFA Provider not found.", HttpStatus.NOT_FOUND);
     }
+
 }
